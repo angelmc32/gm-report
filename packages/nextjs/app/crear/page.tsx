@@ -3,7 +3,13 @@
 import { ChangeEvent, FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { NextPage } from "next";
+import path from "path";
+import { v4 as uuidv4 } from "uuid";
+import supabase from "~~/services/supabase";
 import { notification } from "~~/utils/scaffold-eth";
+
+const supabaseApiUrl = process.env.NEXT_PUBLIC_SUPABASE_URL_API ?? "";
+const cdnUrl = `${supabaseApiUrl}/storage/v1/object/public/videos/`;
 
 const CreatePost: NextPage = () => {
   const [file, setFile] = useState<File | null>(null);
@@ -25,11 +31,21 @@ const CreatePost: NextPage = () => {
     if (!file || !form.title || !form.description) {
       return notification.error("Todos los campos son requeridos para crear Reporte");
     }
-    formData.append("file", file);
-    formData.append("title", form.title);
-    formData.append("description", form.description);
     setIsLoading(true);
     try {
+      const { data: videoData, error: supabaseError } = await supabase.storage
+        .from("videos")
+        .upload(uuidv4() + path.extname(file.name), file);
+
+      if (supabaseError) {
+        return notification.error("Something went wrong :(");
+      }
+
+      formData.append("file", file);
+      formData.append("title", form.title);
+      formData.append("description", form.description);
+      formData.append("mediaUrl", cdnUrl + videoData?.path);
+
       const response = await fetch("api/upload-video", {
         method: "POST",
         body: formData,
@@ -39,6 +55,8 @@ const CreatePost: NextPage = () => {
         notification.success(`Tu publicación fue creada con id ${data.post.id}`);
         push("/");
       } else {
+        console.error("error!!!");
+        console.log("response as data:", data);
         notification.error(data.error);
       }
     } catch (error) {
