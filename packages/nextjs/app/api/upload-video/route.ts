@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getDownloadURL, ref, uploadBytes } from "firebase/storage";
+import { getDownloadURL, ref, uploadBytesResumable } from "firebase/storage";
 import path from "path";
 import { v4 as uuidv4 } from "uuid";
 import { storage } from "~~/services/firebase";
@@ -21,10 +21,9 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    console.log(path.extname(file.name));
     const videoRef = ref(storage, `videos/${uuidv4()}${path.extname(file.name)}`);
 
-    const snapshot = await uploadBytes(videoRef, file);
+    const snapshot = await uploadBytesResumable(videoRef, file);
     const videoMediaUrl = await getDownloadURL(snapshot.ref);
 
     const post = await prisma.gmPost.create({
