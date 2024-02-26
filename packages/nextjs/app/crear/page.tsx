@@ -3,9 +3,15 @@
 import { ChangeEvent, FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { NextPage } from "next";
+import path from "path";
+import { v4 as uuidv4 } from "uuid";
 import { useAccount } from "wagmi";
 import { AddressInput, RainbowKitFormConnectButton } from "~~/components/scaffold-eth";
+import supabase from "~~/services/supabase";
 import { notification } from "~~/utils/scaffold-eth";
+
+const supabaseApiUrl = process.env.NEXT_PUBLIC_SUPABASE_API_URL ?? "";
+const cdnUrl = `${supabaseApiUrl}/storage/v1/object/public/videos/`;
 
 const CreatePost: NextPage = () => {
   const [file, setFile] = useState<File | null>(null);
@@ -25,20 +31,29 @@ const CreatePost: NextPage = () => {
 
   async function createReport(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const formData = new FormData();
     if (!file || !form.title || !form.description || !address) {
       return notification.error("Todos los campos son requeridos para crear Reporte");
     }
-    formData.append("file", file);
-    formData.append("title", form.title);
-    formData.append("description", form.description);
-    formData.append("connectedAddress", address);
-    formData.append("collaborator", collaboratorAddress);
     setIsLoading(true);
     try {
+      const { data: videoData, error: videoUploadError } = await supabase.storage
+        .from("videos")
+        .upload(uuidv4() + path.extname(file.name), file);
+
+      if (videoUploadError) {
+        notification.error("Error al subir el video");
+      }
+
       const response = await fetch("api/posts", {
         method: "POST",
-        body: formData,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title: form.title,
+          description: form.description,
+          connectedAddress: address,
+          collaborator: collaboratorAddress,
+          mediaUrl: cdnUrl + videoData?.path,
+        }),
       });
       const data = await response.json();
       if (response.status === 200) {
